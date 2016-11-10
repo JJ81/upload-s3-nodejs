@@ -1,0 +1,4 @@
+npm install --save-dev aws-sdk
+npm install --save-dev formidable
+
+TODO dependencies vs. devDependencies vs. peerDependencies
