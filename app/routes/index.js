@@ -5,6 +5,9 @@ var router = express.Router();
 var aws_config = require('../secret/aws.config.js');
 var AWS = require('aws-sdk');
 
+var lwip = require('lwip');/*이미지 파일 처리 모듈*/
+
+
 AWS.config.region = aws_config.region;
 AWS.config.accessKeyId = aws_config.accessKeyId;
 AWS.config.secretAccessKey = aws_config.secretAccessKey;
@@ -49,34 +52,57 @@ router.post('/upload', function (req, res) {
     console.log(files['img_files[]'].length);
 
     console.info('files info');
-    console.info(files);
+    console.info(files['img_files[]'].size);
 
-    console.info('fields info');
-    console.info(fields);
+    //console.info('fields info');
+    //console.info(fields);
 
+
+
+    lwip.open(files['img_files[]'].path, function(err, image){
+      console.log('img resize work...');
+      // check err...
+      // define a batch of manipulations and save to disk as JPEG:
+      image.batch()
+        .scale(0.20)          // scale to 75%
+        //.rotate(45, 'white')  // rotate 45degs clockwise (white fill)
+        //.crop(200, 200)       // crop a 200X200 square from center
+        //.blur(5)              // Gaussian blur with SD=5
+        .writeFile(files['img_files[]'].path, function(err){
+          //console.info('files info');
+          //console.info(files['img_files[]'].size);
+        //  //check err...
+        //  //done.
+          // 이 구간에서 몇 번의 for문을 돌아서 업로드를 해야 한다??
+          var params = {
+            Bucket: S3_BUCKET_NAME,
+            Key: 'channel4/test/' + files['img_files[]'].name, // 앞에 폴더이름을 넣어주면 버킷내에 자동으로 생성이 된다. 업로드 갯수에 따라서 배열을 넣고 빼는 기능이 필요하다
+            ACL:'public-read',
+            Body: require('fs').createReadStream(files['img_files[]'].path)
+          };
+
+          s3.upload(params, function(err, data){
+            if(err){
+              console.error('err : ' + err);
+            }else{
+              console.log('upload result');
+              console.info(data);
+              res.json({
+                "success" : true,
+                "statusCode" : "200"
+              });
+            }
+          });
+        });
+    });
+
+
+
+    //files['img_files[]'].path; // files temp path
     //console.info(files['img_files[]'].name);
     //console.info(files['img_files[]'].path);
 
-    // 이 구간에서 몇 번의 for문을 돌아서 업로드를 해야 한다??
-    var params = {
-      Bucket: S3_BUCKET_NAME,
-      Key: 'channel4/test/' + files['img_files[]'].name, // 앞에 폴더이름을 넣어주면 버킷내에 자동으로 생성이 된다. 업로드 갯수에 따라서 배열을 넣고 빼는 기능이 필요하다
-      ACL:'public-read',
-      Body: require('fs').createReadStream(files['img_files[]'].path)
-    };
 
-    s3.upload(params, function(err, data){
-      if(err){
-        console.error('err : ' + err);
-      }else{
-        console.log('upload result');
-        console.info(data);
-        res.json({
-          "success" : true,
-          "statusCode" : "200"
-        });
-      }
-    });
   });
 });
 
