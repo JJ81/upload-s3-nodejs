@@ -1,22 +1,24 @@
 var express = require('express');
 var router = express.Router();
+var uploader = require('../services/uploader');
 
 // set for using S3 in aws
-var aws_config = require('../secret/aws.config.js');
-var AWS = require('aws-sdk');
+// var aws_config = require('../secret/aws.config.js');
+// var AWS = require('aws-sdk');
 
-AWS.config.region = aws_config.region;
-AWS.config.accessKeyId = aws_config.accessKeyId;
-AWS.config.secretAccessKey = aws_config.secretAccessKey;
-var S3_BUCKET_NAME = aws_config.bucketName;
+// AWS.config.region = aws_config.region;
+// AWS.config.accessKeyId = aws_config.accessKeyId;
+// AWS.config.secretAccessKey = aws_config.secretAccessKey;
+// var S3_BUCKET_NAME = aws_config.bucketName;
+
 var formidable = require('formidable');
-
 
 router.get('/list', function(req, res) {
   res.json({
     'success' : true
   });
 });
+
 
 router.post('/upload', function (req, res) {
   var s3 = new AWS.S3(); // AWS 설정이 되고 나서 인스턴스를 실행해야 한다
@@ -27,7 +29,6 @@ router.post('/upload', function (req, res) {
   });
 
   form.parse(req, function (err, fields, files) {
-
     /**
      * TODO 1. S3 버킷에 폴더를 생성한다. ok 자동으로 생성이 된다.
      * TODO 2. 해당 폴더에 이름을 바꾸어서 업로드한다. ok
@@ -78,6 +79,67 @@ router.post('/upload', function (req, res) {
       }
     });
   });
+});
+
+router.post('/upload2', function (req, res) {
+  
+  var upload_path = require('path').join(__dirname, '/../temp');
+  var form = new formidable.IncomingForm({
+    encoding: 'utf-8',
+    keepExtensions: true,
+    multiples: true,
+    uploadDir: upload_path
+  });
+
+  form.parse(req, function (err, fields, files) {
+    uploader.start(files['img_files[]'].path, function (err, data) {      
+      if(err){
+        console.error('err : ' + err);
+      }else{
+        console.log('upload result');
+        console.info(data);
+
+        res.json({
+          "success" : true,
+          "statusCode" : "200"
+        });
+      }
+    });    
+  });
+
+});
+
+/**
+ * 파일을 압축하여 업로드한다.
+ */
+router.post('/upload-zip', function (req, res) {
+
+  var upload_path = require('path').join(__dirname, '/../temp');
+  var converter = require('../services/converter');
+  var form = new formidable.IncomingForm({
+    encoding: 'utf-8',
+    keepExtensions: true,
+    multiples: true,
+    uploadDir: upload_path
+  });
+
+  form.parse(req, function (err, fields, files) {
+    console.log('parse through formidable..');
+
+    var file_name = files['img_files[]'].path.split('/').pop();
+        
+    console.log('compressing..');
+    converter.zip(file_name, function (err, data) {
+      console.log(data);
+    });
+
+    // console.log('decompressing...');
+    // converter.unzip('upload_c835aa2185069a23ab834358a2c49bb7.JPG.gz', function (err, data) {
+    //   console.log(data);
+    // });
+    
+  });
+
 });
 
 module.exports = router;
