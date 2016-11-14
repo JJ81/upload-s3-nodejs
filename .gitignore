@@ -2,3 +2,4 @@
 .idea
 /app/node_modules
 /app/secret/aws.config.js
+/app/temp
