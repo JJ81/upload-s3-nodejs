@@ -4,3 +4,5 @@
 3. crop image file
 4. track progress status and offer bar when uploading
 5. download file
+
+reference : https://github.com/EyalAr/lwip#sharpen
