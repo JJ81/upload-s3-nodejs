@@ -1,90 +1,108 @@
 
-var fs = require('fs');     // file system
-var zlib = require('zlib'); // compress module
+var fs = require('fs-extra');   // file system
+var zlib = require('zlib');     // compress module
 var path = require('path');
 
+var imagemin = require('imagemin');
+var imageminMozjpeg = require('imagemin-mozjpeg');
+var imageminPngquant = require('imagemin-pngquant');
+// var imageminOptipng = require('imagemin-optipng'); // 압축율이 낮아 일단 패스
+
+var async = require('async');
+
 /**
- * 파일을 압축한다.
- * @file_path : 압축할 파일의 경로
+ * 이미지 파일을 최적화 한다.
+ * @files : formidable 의 파일 배열
  * @callback : 콜백함수
- * zlib 의 Gzip 모듈을 이용한다.
+ * imagemin 을 이용한다.
+ * imageminPngquant :
+ *  quality min/max 를 미달/초과 하는 경우 오류가 발생한다. (https://github.com/pornel/pngquant/issues/176)
+ * async : http://justinklemm.com/node-js-async-tutorial/ 참고
  */
-exports.zip = function (file_name, callback) {
+exports.minify = function (files, callback) {
+    
+    console.log('minify start');
 
-    console.log('compress start!');
-
-    var folder_path = path.join(__dirname, '../temp/');
-    var file_path = path.join(folder_path, file_name);
-
-    var target_file = fs.createReadStream(file_path);             // 스트림으로부터 파일을 읽어들인다. 
-    var output_name = path.join(folder_path, file_name + '.gz');  // 출력파일명을 지정한다.
-    var output_file = fs.createWriteStream(output_name);          // 출력파일을 생성한다.
-
-    // gzip 인스턴스 생성
-    var gzip = zlib.createGzip({
-      level: zlib.Z_BEST_COMPRESSION
-    });      
-
-    // gzip 압축시작
-    target_file.pipe(gzip).pipe(output_file);    
-
-    gzip.on('error', function () {
-      console.log('compress failed.');
-      callback('fail', output_name);
-      gzip.removeAllListeners();
-      gzip = null;          
+    // 빌드 후 출력할 폴더 경로
+    var upload_path = path.join(__dirname, '/../uploads');
+    var build_path = path.join(__dirname, '/../build/minified');
+    fs.ensureDir(build_path, function (err) {
+        if (err) {
+            console.log('minify : build path creation failed.');
+            return;
+        }
     });
 
-    gzip.on('end', function () { 
-      console.log('compress finished.');
-      callback('', output_name);
-      gzip.removeAllListeners();
-      gzip = null;
-
-      fs.unlinkSync(file_path);
-      console.log('original file has removed.');
+    // 최적화 시작
+    var success_count = 0;
+    async.each(files, function (item, cb) {
+        imagemin([item.path], build_path, {
+            plugins: [
+                imageminMozjpeg(),
+                imageminPngquant({quality: '0-100', verbose: true})
+            ]
+        }).then(function (file_info) { 
+            success_count++;
+            console.log("%d 개의 파일 중 %d 개 최적화 완료..", files.length, success_count);            
+            cb();
+        });
+    }, function (err) {
+        if (err) {
+            callback(err);
+        } else {
+            console.log('minify completed.');
+            callback(null);
+        }    
     });
 
 };
 
 /**
- * 압추 파일을 해제한다.
- * @file_path : 해제할 압축 파일의 경로
+ * 파일을 압축한다.
+ * @files : formidable 의 파일 배열
  * @callback : 콜백함수
- * zlib 의 Gunzip 모듈을 이용한다.
+ * zlib 의 Gzip 모듈을 이용한다.
+ * async : http://justinklemm.com/node-js-async-tutorial/ 참고
  */
-exports.unzip = function (file_name, callback) {
+exports.compress = function (files, callback) {
 
-  console.log('decompress start!');
-  
-  var folder_path = path.join(__dirname, '../temp/');
-  var file_path = path.join(folder_path, file_name);
+    console.log('compress start!');
 
-  var target_file = fs.createReadStream(file_path); // 스트림으로부터 압축 파일을 읽어들인다.
-  var output_name = path.join(folder_path, file_name.substr(0, file_name.lastIndexOf('.'))); // .gz 를 제거한다. 
-  var output_file = fs.createWriteStream(output_name); // 출력 파일을 생성한다.
-  
-  // gunzip 인스턴스 생성
-  var gunzip = zlib.createGunzip();
+    var minified_path = path.join(__dirname, '/../build/minified');
+    var build_path = path.join(__dirname, '/../build/compressed');
+    fs.ensureDir(build_path, function (err) {
+        if (err) {
+            console.log('compress : build path creation failed.');
+            return;
+        }
+    });
 
-  // gzip 압축해제 시작
-  target_file.pipe(gunzip).pipe(output_file);
+    // 압축 시작 (직렬)
+    var success_count = 0;
+    async.each(files, function (item, cb) {
+        var file_name = item.path.split('/').pop();
+        var build_file = fs.createWriteStream(path.join(build_path, file_name + '.gz'));
+        var gzip = zlib.createGzip();
+        fs.createReadStream(path.join(minified_path, file_name)).pipe(gzip).pipe(build_file);
 
-  gunzip.on('error', function () {
-    console.log('decompress failed.');
-    callback('fail', output_name);
-    gunzip.removeAllListeners();
-    gunzip = null;
-  });
+        gzip.on('end', function () {
+            success_count++;
+            console.log("%d 개의 파일 중 %d 개 압축 완료..", files.length, success_count);            
+            cb();
+        });
+        
+        gzip.on('error', function () {
+            cb('compress error!');
+        });
+    }, function (err) {
+        if (err) {
+            callback(err);
+        } else {
+            console.log('compress completed.');
+            callback(null);
+        }
+    });
 
-  gunzip.on('end', function () { 
-    console.log('decompress finished.');
-    callback('', output_name);
-    gunzip.removeAllListeners();
-    gunzip = null;
-
-    // fs.unlinkSync(file_path);
-    // console.log('original file has removed.');    
-  });
+    return;  
 
 };

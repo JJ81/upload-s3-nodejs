@@ -18,12 +18,12 @@
           
         </div>
 
-        <form id="form-upload" action="/v1/upload2" enctype="multipart/form-data" method="post">
+        <form id="form-upload" action="/v1/parse" enctype="multipart/form-data" method="post">
             <div class="row">
                 <div class="col-lg-12">
                     <fieldset class="form-group">
                         <label>file 1</label>
-                        <input class="form-control" type="file" name="img_files[]" required />
+                        <input class="form-control" type="file" name="img_files[]" required multiple />
                     </fieldset>
 
                     <!--<fieldset class="form-group">-->

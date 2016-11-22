@@ -1,9 +1,11 @@
 
-// set for using S3 in aws
+var fs = require('fs-extra');   // file system
+var path = require('path');
 var aws_config = require('../secret/aws.config.js');
 var AWS = require('aws-sdk');
 var S3_BUCKET_NAME;
 var _s3;
+var async = require('async');
 
 /**
  * 환경설정
@@ -21,26 +23,76 @@ function setup () {
 
 /**
  * 파일을 s3 버킷에 업로드한다.
- * @file_path : 업로드할 파일의 경로
+ * @files : formidable 의 파일 배열
  * @callback : 콜백함수
  * aws sdk를 이용한다.
+ * async : http://justinklemm.com/node-js-async-tutorial/ 참고
  */
-exports.start = function (file_path, callback) {
+exports.start = function (files, callback) {
+
+    console.log('upload start!');
 
 	setup();
 
-	var file_name = file_path.split('/').pop();
+    var compressed_path = path.join(__dirname, '/../build/compressed');
 
-	// 업로드
-	var params = {
-		Bucket: S3_BUCKET_NAME,
-		Key: 'channel4/test/' + file_name,
-		ACL:'public-read',
-		Body: require('fs').createReadStream(file_path)
-	};  
+	// 업로드 시작 (직렬)
+    var success_count = 0;
+    async.each(files, function (item, cb) {    
+        var file_name = item.path.split('/').pop();
+        var params = {
+            Bucket: S3_BUCKET_NAME,
+            Key: 'channel4/test/' + file_name + '.gz',
+            ACL:'public-read',
+            Body: fs.createReadStream(path.join(compressed_path, file_name + '.gz'))
+        };        
 
-	_s3.upload(params, function(err, data){
-		callback(err, data);
-	});
+        _s3.upload(params, function(err, data){
+            if (err) {
+                cb(err);
+            } else {
+                success_count++;
+                console.log("%d 개의 파일 중 %d 개 업로드 완료..", files.length, success_count);
+                cb();
+            }
+        });        
+    }, function (err) {
+        if (err) {
+            callback(err);
+        } else {
+            console.log('upload completed.');
+            callback(null);
+        }
+    });
 
+    // 업로드 시작 (병렬)
+    // TODO 오류가 발생했을 경우 처리는?
+    // var asyncTasks = [];
+    // files.forEach(function (item) {
+    //     asyncTasks.push(function (cb) {
+    //         var file_name = item.path.split('/').pop();
+    //         var params = {
+    //             Bucket: S3_BUCKET_NAME,
+    //             Key: 'channel4/test/' + file_name + '.gz',
+    //             ACL:'public-read',
+    //             Body: fs.createReadStream(path.join(compressed_path, file_name + '.gz'))
+    //         };        
+
+    //         _s3.upload(params, function(err, data){
+    //             if (err) {
+    //                 cb(err);
+    //             } else {
+    //                 cb();
+    //             }
+    //         });
+    //     });
+    // });
+    
+    // async.parallel(asyncTasks, function(){
+    //     // All tasks are done now
+    //     console.log('upload completed.');
+    //     callback(null);
+    // });
+
+    return;
 };

@@ -1,5 +1,10 @@
 var express = require('express');
 var router = express.Router();
+var path = require('path');
+
+var async = require('async');
+var converter = require('../services/converter');
+var formParser = require('../services/form-parser');
 var uploader = require('../services/uploader');
 
 // set for using S3 in aws
@@ -17,6 +22,61 @@ router.get('/list', function(req, res) {
   res.json({
     'success' : true
   });
+});
+
+router.post('/parse', function (req, res) {
+
+    var tasks = [
+        /**
+         * POST 요청을 처리한다.     
+         */    
+        function (callback) {
+            formParser.parse(req, res, function (err, files) {
+                if (err) return callback(err);
+                callback(null, files);
+            });
+        },
+
+        /**
+         * 파일을 최적화 한다.
+         */
+        function (files, callback) {
+            converter.minify(files, function (err) {
+                if (err) return callback(err);
+                callback(null, files);
+            });
+        },
+
+        /**
+         * 파일을 압축한다.
+         */
+        function (files, callback) {
+            converter.compress(files, function (err) {
+                if (err) return callback(err);
+                callback(null, files);
+            });
+        },         
+
+        /**
+         * 파일을 업로드한다.
+         */
+        function (files, callback) {
+            uploader.start(files, function (err) {
+                if (err) return callback(err);
+                callback(null);
+            });
+        }
+    ];
+
+    async.waterfall(tasks, function (err) {
+        if (err) {
+            console.log('async error : ' + err);        
+        } else {
+            res.writeHead(200, {'content-type': 'text/plain'});
+            res.write('Upload received :\n');
+        }
+    });
+
 });
 
 
@@ -79,67 +139,6 @@ router.post('/upload', function (req, res) {
       }
     });
   });
-});
-
-router.post('/upload2', function (req, res) {
-  
-  var upload_path = require('path').join(__dirname, '/../temp');
-  var form = new formidable.IncomingForm({
-    encoding: 'utf-8',
-    keepExtensions: true,
-    multiples: true,
-    uploadDir: upload_path
-  });
-
-  form.parse(req, function (err, fields, files) {
-    uploader.start(files['img_files[]'].path, function (err, data) {      
-      if(err){
-        console.error('err : ' + err);
-      }else{
-        console.log('upload result');
-        console.info(data);
-
-        res.json({
-          "success" : true,
-          "statusCode" : "200"
-        });
-      }
-    });    
-  });
-
-});
-
-/**
- * 파일을 압축하여 업로드한다.
- */
-router.post('/upload-zip', function (req, res) {
-
-  var upload_path = require('path').join(__dirname, '/../temp');
-  var converter = require('../services/converter');
-  var form = new formidable.IncomingForm({
-    encoding: 'utf-8',
-    keepExtensions: true,
-    multiples: true,
-    uploadDir: upload_path
-  });
-
-  form.parse(req, function (err, fields, files) {
-    console.log('parse through formidable..');
-
-    var file_name = files['img_files[]'].path.split('/').pop();
-        
-    console.log('compressing..');
-    converter.zip(file_name, function (err, data) {
-      console.log(data);
-    });
-
-    // console.log('decompressing...');
-    // converter.unzip('upload_c835aa2185069a23ab834358a2c49bb7.JPG.gz', function (err, data) {
-    //   console.log(data);
-    // });
-    
-  });
-
 });
 
 module.exports = router;
