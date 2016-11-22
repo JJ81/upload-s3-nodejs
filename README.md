@@ -1,6 +1,8 @@
 # upload-s3-nodejs
-1. upload file from local to s3 directly or else.
-2. resize file
-3. crop image file
-4. track progress status and offer bar when uploading
-5. download file
+
+References
+zlip : https://nodejs.org/api/zlib.html (compress/decompress module)
+
+1. Strip meta data from image.
+2. Using Async callback.
+3. Knowing how passport.js works.
