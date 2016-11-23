@@ -6,7 +6,7 @@ var formidable = require('formidable'),
 /**
  * formidable 을 이용하여, POST 요청을 처리한다.  
  */
-exports.parse = function (req, res, callback) {
+exports.parse = function (req, callback) {
     
     if (req.method.toLowerCase() === 'post') {
         var form = new formidable.IncomingForm({

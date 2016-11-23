@@ -8,7 +8,52 @@ var imageminMozjpeg = require('imagemin-mozjpeg');
 var imageminPngquant = require('imagemin-pngquant');
 // var imageminOptipng = require('imagemin-optipng'); // 압축율이 낮아 일단 패스
 
+var lwip = require('lwip');
 var async = require('async');
+
+/**
+ * @이미지 파일을 특정 비율로 축소한다.
+ */
+exports.scale = function (files, callback) {
+
+    console.log('scale start');
+
+    var minified_path = path.join(__dirname, '/../build/minified');
+    var build_path = path.join(__dirname, '/../build/resized');
+    fs.ensureDir(build_path, function (err) {
+        if (err) {
+            console.log('scale : build path creation failed.');
+            return;
+        }
+    });
+
+    var success_count = 0;
+    async.each(files, function (item, cb) {
+        var file_name = item.path.split('/').pop();
+        var build_file = path.join(build_path, file_name);
+
+        lwip.open(item.path, function (err, image) {            
+            image.batch()
+                .scale(0.75)
+                .writeFile(build_file, function (err) {
+                    if (err) {
+                        cb(err);
+                    } else {
+                        success_count++;
+                        console.log("%d 개의 파일 중 %d 개 스케일 완료..", files.length, success_count);                        
+                        cb();
+                    }
+                });
+        });
+    }, function (err) {
+        if (err) {
+            callback(err);
+        } else {
+            console.log('scale completed.');
+            callback(null);
+        }    
+    });
+};
 
 /**
  * 이미지 파일을 최적화 한다.
@@ -68,7 +113,7 @@ exports.compress = function (files, callback) {
 
     console.log('compress start!');
 
-    var minified_path = path.join(__dirname, '/../build/minified');
+    var minified_path = path.join(__dirname, '/../build/resized');
     var build_path = path.join(__dirname, '/../build/compressed');
     fs.ensureDir(build_path, function (err) {
         if (err) {

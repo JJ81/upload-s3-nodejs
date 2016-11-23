@@ -3,18 +3,9 @@ var router = express.Router();
 var path = require('path');
 
 var async = require('async');
-var converter = require('../services/converter');
-var formParser = require('../services/form-parser');
-var uploader = require('../services/uploader');
-
-// set for using S3 in aws
-// var aws_config = require('../secret/aws.config.js');
-// var AWS = require('aws-sdk');
-
-// AWS.config.region = aws_config.region;
-// AWS.config.accessKeyId = aws_config.accessKeyId;
-// AWS.config.secretAccessKey = aws_config.secretAccessKey;
-// var S3_BUCKET_NAME = aws_config.bucketName;
+var converter = require('../services/converter');    // compress, image minify
+var formParser = require('../services/form-parser'); // formidable
+var uploader = require('../services/uploader');      // file upload
 
 var formidable = require('formidable');
 
@@ -25,20 +16,28 @@ router.get('/list', function(req, res) {
 });
 
 router.post('/parse', function (req, res) {
+    
+    // TODO 
+    // 1. 작업완료 시 중간 결과물들은 모두 삭제
+    // 2. DB 에 로그정보 기록
+    // 3. GIF, ICO 등 기타 다른 포멧의 이미지 테스트 필요
 
     var tasks = [
         /**
-         * POST 요청을 처리한다.     
+         * @POST 요청을 처리한다.
+         * formParser 에서는 formidable 을 통해 req 의 파일을 수신하고, 
+         * 콜백함수를 통해 files (파일정보의 배열) 을 돌려준다. 
          */    
         function (callback) {
-            formParser.parse(req, res, function (err, files) {
+            formParser.parse(req, function (err, files) {
                 if (err) return callback(err);
                 callback(null, files);
             });
         },
 
         /**
-         * 파일을 최적화 한다.
+         * @이미지 파일을 최적화 한다.
+         * 이미지 파일이 아닐 경우 최적화 되지 않는다.
          */
         function (files, callback) {
             converter.minify(files, function (err) {
@@ -48,7 +47,18 @@ router.post('/parse', function (req, res) {
         },
 
         /**
-         * 파일을 압축한다.
+         * @이미지 파일을 축소 한다.
+         * 
+         */
+        function (files, callback) {
+            converter.scale(files, function (err) {
+                if (err) return callback(err);
+                callback(null, files);
+            });
+        },        
+
+        /**
+         * @파일을 개별적으로 압축한다.
          */
         function (files, callback) {
             converter.compress(files, function (err) {
@@ -58,7 +68,7 @@ router.post('/parse', function (req, res) {
         },         
 
         /**
-         * 파일을 업로드한다.
+         * @파일을 개별적으로 업로드한다.
          */
         function (files, callback) {
             uploader.start(files, function (err) {
@@ -68,13 +78,18 @@ router.post('/parse', function (req, res) {
         }
     ];
 
+    // 위에 정의된 tasks 를 series 로 실행한다음 res 를 반환한다.
     async.waterfall(tasks, function (err) {
         if (err) {
-            console.log('async error : ' + err);        
+            res.writeHead(404);
+            res.end(JSON.stringify(err));
+            return;
         } else {
+            console.log('job completed!');
             res.writeHead(200, {'content-type': 'text/plain'});
             res.write('Upload received :\n');
-        }
+            res.end();
+        }        
     });
 
 });
